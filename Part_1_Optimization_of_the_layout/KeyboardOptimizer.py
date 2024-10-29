@@ -4,6 +4,7 @@ import argparse
 import numpy as np
 import pandas as pd
 from functools import wraps
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
 
 import torch
@@ -66,6 +67,16 @@ class KeyboardOptimizer:
 
         return SummaryWriter(log_dir=self.log_dir) # Возвращаем инициализированный SummaryWriter
     
+    def log_hparams_and_metrics(self, hparams, best_score):
+        # Получение текущего времени в читаемом формате
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_name = f"run_{timestamp}"  # Читаемое имя
+
+        # Логирование гиперпараметров и метрик
+        self.writer.add_hparams(hparams, {
+            'best_score': best_score,
+        }, run_name=run_name)
+        
     @staticmethod
     def get_device(select=None):
         if select is None or select == 'cuda':
@@ -307,27 +318,17 @@ class KeyboardOptimizer:
         self.writer.close()
                 
         return best_score, best_image, stats
-    
-    def log_hparams_and_metrics(self, hparams, best_score):
-        # Получение текущего времени в читаемом формате
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_name = f"run_{timestamp}"  # Читаемое имя
-
-        # Логирование гиперпараметров и метрик
-        self.writer.add_hparams(hparams, {
-            'best_score': best_score,
-        }, run_name=run_name)
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description='Run Keyboard Optimizer with specified parameters.')
-    parser.add_argument('-p', '--population_size', type=int, default=200, help='Size of the population.')
-    parser.add_argument('-e', '--elitism_top_k', type=int, default=10, help='Number of top individuals to retain for elitism.')
-    parser.add_argument('-r', '--random_size', type=int, default=100, help='Number of random individuals to add.')
-    parser.add_argument('-g', '--num_generations', type=int, default=100, help='Number of generations to process.')
-    parser.add_argument('-n', '--num_restarts', type=int, default=10, help='Number of restarts in optimization.')
-    parser.add_argument('-m', '--message_word', type=str, default='высокоинтеллектуальное_аннотирование_образование', help='Word used in message generation.')
-    parser.add_argument('-d', '--device', type=str, choices=['cpu', 'cuda'], default='cuda', help='Device to run the optimizer on.')
-    
+    parser = argparse.ArgumentParser(description='Запуск оптимизатора клавиатуры с указанными параметрами.')
+    parser.add_argument('-p', '--population_size', type=int, default=200, help='Размер популяции.')
+    parser.add_argument('-e', '--elitism_top_k', type=int, default=10, help='Число лучших индивидов, сохраняемых для элитизма.')
+    parser.add_argument('-r', '--random_size', type=int, default=100, help='Число случайных индивидов для добавления.')
+    parser.add_argument('-g', '--num_generations', type=int, default=100, help='Количество поколений для обработки.')
+    parser.add_argument('-n', '--num_restarts', type=int, default=10, help='Количество перезапусков в оптимизации.')
+    parser.add_argument('-m', '--message_word', type=str, default='высокоинтеллектуальное_аннотирование_образование', help='Слово, используемое в генерации сообщений.')
+    parser.add_argument('-d', '--device', type=str, choices=['cpu', 'cuda'], default='cuda', help='Устройство для запуска оптимизатора.')
+
     return parser.parse_args()
 
 # Использование класса
