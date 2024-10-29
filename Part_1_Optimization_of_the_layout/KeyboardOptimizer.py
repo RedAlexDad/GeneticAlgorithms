@@ -1,12 +1,13 @@
 import os
 import time
-import torch
 import argparse
 import numpy as np
 import pandas as pd
 from functools import wraps
 from PIL import Image, ImageDraw, ImageFont
 
+import torch
+from torch.utils.tensorboard import SummaryWriter
 
 def timeit(func):
     @wraps(func)
@@ -22,7 +23,7 @@ def timeit(func):
     return timed_function
 
 class KeyboardOptimizer:
-    def __init__(self, messages, font_name='Roboto-Bold.ttf', working_dir=os.getcwd(), device=None):
+    def __init__(self, messages, message_word, font_name='Roboto-Bold.ttf', working_dir=os.getcwd(), device=None, experiment_name='keyboard'):
         self.keyboard_img_path = os.path.join(working_dir, 'keyboard.png')
         self.font_path = os.path.join(working_dir, font_name)
         self.ROWS_CONTENT = [
@@ -39,11 +40,32 @@ class KeyboardOptimizer:
             [(155, 500),(255, 500),(345, 500),(445, 500), (540, 500),(635, 500),(730, 500),(820, 500),(920, 500)],
             [(224, 645),(530, 645),(855, 645),(980, 645)],
         ]
+        self.message_word = message_word
         self.prepare_data(messages)
         
         self.device = self.get_device(device)
         print(f'Использованное устройство: {self.device}')
 
+        # Инициализация логгера
+        self.writer = self.initialize_log_dir(experiment_name, message_word)
+        
+    def initialize_log_dir(self, experiment_name, message_word):
+        """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter."""
+        self.experiment_name = f'{experiment_name}_{message_word}' # Сохраняем название эксперимента
+        self.log_dir = f'logs/{experiment_name}_{message_word}'  # Базовый путь для логов
+        # Проверка существования директории и генерация нового имени, если необходимо
+        i = 0
+        while os.path.exists(self.log_dir):
+            self.log_dir = f'logs/{experiment_name}_{message_word}_{i}'
+            i += 1
+        os.makedirs(self.log_dir)   # Создаем директорию, если она не существует
+        # Вывод информации о названии эксперимента
+        print(f"Директория для эксперимента '{experiment_name}' инициализирована по пути: {self.log_dir}")
+        # Сохраняем уникальное имя для использования в save_model
+        self.unique_experiment_name = os.path.basename(self.log_dir)  
+
+        return SummaryWriter(log_dir=self.log_dir) # Возвращаем инициализированный SummaryWriter
+    
     @staticmethod
     def get_device(select=None):
         if select is None or select == 'cuda':
@@ -249,6 +271,10 @@ class KeyboardOptimizer:
                 scores = self.get_scores_gpu(population)
                 population = self.generate_new_population(population, scores)
 
+                best_score_gen = min(scores)
+                worst_score_gen = max(scores)
+                mean_score_gen = np.mean(scores)
+                
                 stats.append({
                     'restart': restart + 1,
                     'generation': generation,
@@ -256,16 +282,41 @@ class KeyboardOptimizer:
                     'worst_score': max(scores),
                     'mean_score': np.mean(scores)
                 })
+                
+                # Логирование значений в TensorBoard
+                self.writer.add_scalar('Score/Best', best_score_gen, restart * num_generations + generation)
+                self.writer.add_scalar('Score/Worst', worst_score_gen, restart * num_generations + generation)
+                self.writer.add_scalar('Score/Mean', mean_score_gen, restart * num_generations + generation)
 
-                if min(scores) < best_score:
-                    best_score = min(scores)
+                if best_score_gen < best_score:
+                    best_score = best_score_gen
                     best_image = self.plot_keyboard(population[np.argmin(scores)])
                     print(f'Поколение: {generation}\tЛучшее расстояние: {min(scores):.1f}\t'
                           f'Худшее расстояние: {max(scores):.1f}\t'
                           f'Среднее расстояние в популяции: {np.mean(scores):.1f}')
+                    
             print('-' * 120)
+
+        self.log_hparams_and_metrics({
+            'population_size': population_size,
+            'elitism_top_k': elitism_top_k,
+            'random_size': random_size,
+            'num_generations': num_generations,
+            'num_restarts': num_restarts,
+        }, best_score)
+        self.writer.close()
                 
         return best_score, best_image, stats
+    
+    def log_hparams_and_metrics(self, hparams, best_score):
+        # Получение текущего времени в читаемом формате
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_name = f"run_{timestamp}"  # Читаемое имя
+
+        # Логирование гиперпараметров и метрик
+        self.writer.add_hparams(hparams, {
+            'best_score': best_score,
+        }, run_name=run_name)
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Run Keyboard Optimizer with specified parameters.')
@@ -274,7 +325,7 @@ def parse_arguments():
     parser.add_argument('-r', '--random_size', type=int, default=100, help='Number of random individuals to add.')
     parser.add_argument('-g', '--num_generations', type=int, default=100, help='Number of generations to process.')
     parser.add_argument('-n', '--num_restarts', type=int, default=10, help='Number of restarts in optimization.')
-    parser.add_argument('-m', '--message_word', type=str, default='высокоинтеллектуальное', help='Word used in message generation.')
+    parser.add_argument('-m', '--message_word', type=str, default='высокоинтеллектуальное_аннотирование_образование', help='Word used in message generation.')
     parser.add_argument('-d', '--device', type=str, choices=['cpu', 'cuda'], default='cuda', help='Device to run the optimizer on.')
     
     return parser.parse_args()
@@ -283,9 +334,11 @@ def parse_arguments():
 if __name__ == '__main__':
     # Парсинг аргументов командной строки
     args = parse_arguments()
-        
-    messages = [np.random.choice([args.message_word], size=1000)]   
-    optimizer = KeyboardOptimizer(messages, device=args.device)
+    messages_list = args.message_word.split('_')
+    messages = [np.random.choice(messages_list, size=1000)] 
+    print(f'Введенные слова: {", ".join(messages_list)}')       
+     
+    optimizer = KeyboardOptimizer(messages, args.message_word, device=args.device)
 
     # Извлечение параметров из аргументов
     POPULATION_SIZE = args.population_size
@@ -305,6 +358,4 @@ if __name__ == '__main__':
     if best_image:
         output_path = "best_layout.png"
         best_image.save(output_path, "PNG")
-
-        import os
         os.system(f"xdg-open {output_path}")
