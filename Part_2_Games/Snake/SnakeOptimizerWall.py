@@ -24,7 +24,7 @@ def timeit(func):
     return timed_function
 
 
-class SnakeOptimizer:
+class SnakeOptimizerWall:
     def __init__(self, grid_size=16, width=400, height=400, device=None, experiment_name='snake'):
         self.grid = grid_size
         self.width = width
@@ -79,16 +79,9 @@ class SnakeOptimizer:
         self.snake['x'] += self.snake['dx']
         self.snake['y'] += self.snake['dy']
 
-        # Обработка выхода змейки за границы поля
-        if self.snake['x'] < 0:
-            self.snake['x'] = self.width - self.grid
-        elif self.snake['x'] >= self.width:
-            self.snake['x'] = 0
-
-        if self.snake['y'] < 0:
-            self.snake['y'] = self.height - self.grid
-        elif self.snake['y'] >= self.height:
-            self.snake['y'] = 0
+        # Проверка выхода змейки за границы поля
+        if self.snake['x'] < 0 or self.snake['x'] >= self.width or self.snake['y'] < 0 or self.snake['y'] >= self.height:
+            return -1  # Конец игры
 
         # Обновление ячеек тела змейки
         self.snake['cells'] = [(self.snake['x'], self.snake['y'])] + self.snake['cells']
@@ -104,11 +97,11 @@ class SnakeOptimizer:
 
             for i in range(index + 1, len(self.snake['cells'])):
                 # Проверка на столкновение с собой
-                if (cell[0] == self.snake['cells'][i][0] and
-                    cell[1] == self.snake['cells'][i][1]):
-                    return -1  # Перезапуск игры
+                if cell[0] == self.snake['cells'][i][0] and cell[1] == self.snake['cells'][i][1]:
+                    return -1  # Конец игры
 
         return 0
+
 
     def restart(self):
         # Инициализация змейки и яблока
@@ -263,7 +256,7 @@ class SnakeOptimizer:
                 scores = 0
                 for _ in range(num_repeats):
                     scores += np.array(self.get_scores(population, PATIENCE(generation)))
-                scores /= num_repeats
+                scores = scores / num_repeats  # Изменено
                 bscore = max(scores)
                 # Логирование точности
                 self.writer.add_scalar('Accuracy', bscore, n_restart * num_generations + generation)
@@ -276,12 +269,11 @@ class SnakeOptimizer:
 
         # Записываем параметры и лучшие результаты
         self.log_hparams_and_metrics(hparams, best_score)
-    
+
         # Сохраняем лучшие веса и смещения с учетом номера эксперимента
         file_name = f'snake_weights_{self.unique_experiment_name}.js'
         with open(file_name, 'w') as f:
             f.write('var W = %s;\n' % (json.dumps([[int(1e5 * w) / 1e5 for w in W] for W in best_thingey])))
-
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Запуск оптимизатора змейки с указанными параметрами.')
@@ -295,7 +287,7 @@ def parse_arguments():
 if __name__ == '__main__':
     # Парсинг аргументов командной строки
     args = parse_arguments()
-    optimizer = SnakeOptimizer()
+    optimizer = SnakeOptimizerWall()
 
     # Извлечение параметров из аргументов
     optimizer.train(
