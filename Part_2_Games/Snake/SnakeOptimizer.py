@@ -25,10 +25,11 @@ def timeit(func):
 
 
 class SnakeOptimizer:
-    def __init__(self, grid_size=16, width=400, height=400, device=None, experiment_name='snake'):
+    def __init__(self, grid_size=16, width=400, height=400, device=None, experiment_name='snake', wall_collision=True):
         self.grid = grid_size
         self.width = width
         self.height = height
+        self.wall_collision = wall_collision
         self.snake, self.apple = self.restart()
         
         self.device = self.get_device(device)
@@ -38,9 +39,7 @@ class SnakeOptimizer:
         
     @staticmethod
     def get_device(select=None):
-        if select is None or select == 'cuda':
-            return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        return torch.device('cpu')
+        return torch.device('cuda' if (select in [None, 'cuda'] and torch.cuda.is_available()) else 'cpu')
 
     def initialize_log_dir(self, experiment_name):
         """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter."""
@@ -79,17 +78,22 @@ class SnakeOptimizer:
         self.snake['x'] += self.snake['dx']
         self.snake['y'] += self.snake['dy']
 
-        # Обработка выхода змейки за границы поля
-        if self.snake['x'] < 0:
-            self.snake['x'] = self.width - self.grid
-        elif self.snake['x'] >= self.width:
-            self.snake['x'] = 0
+        if self.wall_collision:
+            # Столкновение со стенами
+            if self.snake['x'] < 0 or self.snake['x'] >= self.width or self.snake['y'] < 0 or self.snake['y'] >= self.height:
+                return -1  # Конец игры
+        else:
+            # Проходимость через границы
+            if self.snake['x'] < 0:
+                self.snake['x'] = self.width - self.grid
+            elif self.snake['x'] >= self.width:
+                self.snake['x'] = 0
 
-        if self.snake['y'] < 0:
-            self.snake['y'] = self.height - self.grid
-        elif self.snake['y'] >= self.height:
-            self.snake['y'] = 0
-
+            if self.snake['y'] < 0:
+                self.snake['y'] = self.height - self.grid
+            elif self.snake['y'] >= self.height:
+                self.snake['y'] = 0
+                
         # Обновление ячеек тела змейки
         self.snake['cells'] = [(self.snake['x'], self.snake['y'])] + self.snake['cells']
 
@@ -262,8 +266,8 @@ class SnakeOptimizer:
             for generation in range(num_generations):
                 scores = 0
                 for _ in range(num_repeats):
-                    scores += np.array(self.get_scores(population, PATIENCE(generation)))
-                scores /= num_repeats
+                    scores = scores + np.array(self.get_scores(population, PATIENCE(generation)))
+                scores = scores / num_repeats
                 bscore = max(scores)
                 # Логирование точности
                 self.writer.add_scalar('Accuracy', bscore, n_restart * num_generations + generation)
@@ -276,10 +280,14 @@ class SnakeOptimizer:
 
         # Записываем параметры и лучшие результаты
         self.log_hparams_and_metrics(hparams, best_score)
+    
+        # Создание директории models, если она не существует
+        os.makedirs('models', exist_ok=True)
+        # Сохраняем лучшие веса и смещения с учетом номера эксперимента
+        file_name = f'models/weights{"_wall" if self.wall_collision else ""}_{self.unique_experiment_name}.js'
+        with open(file_name, 'w') as f:
+            f.write('var W = %s;\n' % (json.dumps([[int(1e5 * w) / 1e5 for w in W] for W in best_thingey])))
 
-        # Сохраняем лучшие веса и смещения
-        with open('snake_weights.js', 'w') as f:
-            f.write('var W = %s;\n'%(json.dumps([[int(1e5*w)/1e5 for w in W] for W in best_thingey])))
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description='Запуск оптимизатора змейки с указанными параметрами.')
@@ -287,13 +295,19 @@ def parse_arguments():
     parser.add_argument('-g', '--num_generations', type=int, default=10, help='Количество поколений для обработки.')
     parser.add_argument('-r', '--num_repeats', type=int, default=3, help='Количество повторений для надежности.')
     parser.add_argument('-n', '--num_restarts', type=int, default=5, help='Количество перезапусков в оптимизации.')
+    parser.add_argument('-w', '--wall_collision', action='store_true', help='Включить столкновение со стенами.')
+    parser.add_argument('-d', '--device', type=str, default='cuda', choices=['cpu', 'cuda'], help='Устройство вычисления: cpu или cuda')
     
     return parser.parse_args()
 
 if __name__ == '__main__':
     # Парсинг аргументов командной строки
     args = parse_arguments()
-    optimizer = SnakeOptimizer()
+    if args.wall_collision:
+        print("Активирован режим столкновения со стеной.")
+    else:
+        print("Режим прохождения через границы.")
+    optimizer = SnakeOptimizer(wall_collision=args.wall_collision)
 
     # Извлечение параметров из аргументов
     optimizer.train(

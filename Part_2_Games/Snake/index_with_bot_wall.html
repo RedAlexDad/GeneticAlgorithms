@@ -22,7 +22,7 @@
       border: 1px solid white;
     }
   </style>
-  <script src="weights_snake_22.js"></script>
+  <script src="snake_weights_snake_14.js"></script>
 </head>
 
 <body>
@@ -120,7 +120,7 @@
     function loop() {
       requestAnimationFrame(loop);
 
-      // slow game loop to 15 fps instead of 60 (60/15 = 4)
+      // Замедление игры до 15 fps вместо 60 (60/15 = 4)
       if (++count < 4) {
         return;
       }
@@ -130,72 +130,67 @@
       count = 0;
       context.clearRect(0, 0, canvas.width, canvas.height);
 
-      // move snake by it's velocity
+      // перемещаем змею по её скорости
       snake.x += snake.dx;
       snake.y += snake.dy;
 
-      // wrap snake position horizontally on edge of screen
-      if (snake.x < 0) {
-        snake.x = canvas.width - grid;
-      }
-      else if (snake.x >= canvas.width) {
-        snake.x = 0;
+      // проверка выхода змейки за границы экрана (без "wrap-around")
+      if (snake.x < 0 || snake.x >= canvas.width || snake.y < 0 || snake.y >= canvas.height) {
+        resetGame();
       }
 
-      // wrap snake position vertically on edge of screen
-      if (snake.y < 0) {
-        snake.y = canvas.height - grid;
-      }
-      else if (snake.y >= canvas.height) {
-        snake.y = 0;
-      }
-
-      // keep track of where snake has been. front of the array is always the head
+      // следим за положением змеи. передний элемент массива всегда является головой
       snake.cells.unshift({ x: snake.x, y: snake.y });
 
-      // remove cells as we move away from them
+      // удаляем клетки по мере продвижения от них
       if (snake.cells.length > snake.maxCells) {
         snake.cells.pop();
       }
 
-      // draw apple
+      // рисуем яблоко
       context.fillStyle = 'red';
       context.fillRect(apple.x, apple.y, grid - 1, grid - 1);
 
-      // draw snake one cell at a time
+      // рисуем змею по одной ячейке за раз
       context.fillStyle = 'green';
       snake.cells.forEach(function (cell, index) {
 
-        // drawing 1 px smaller than the grid creates a grid effect in the snake body so you can see how long it is
+        // рисуем 1 пиксель меньше сетки, чтобы создать эффект сетки в теле змеи,
+        // чтобы вы могли увидеть, насколько длинная она есть
         context.fillRect(cell.x, cell.y, grid - 1, grid - 1);
 
-        // snake ate apple
+        // змейка съела яблоко
         if (cell.x === apple.x && cell.y === apple.y) {
           snake.maxCells++;
 
-          // canvas is 400x400 which is 25x25 grids
+          // полотно 400x400, что составляет 25x25 сеток
           apple.x = getRandomInt(0, 25) * grid;
           apple.y = getRandomInt(0, 25) * grid;
         }
 
-        // check collision with all cells after this one (modified bubble sort)
+        // Проверка столкновения со всеми клетками после этого (измененная сортировка пузырька)
         for (var i = index + 1; i < snake.cells.length; i++) {
-
-          // snake occupies same space as a body part. reset game
+          // змейка занимает одинаковое пространство, что и часть тела. перезапуск игры
           if (cell.x === snake.cells[i].x && cell.y === snake.cells[i].y) {
-            snake.x = 160;
-            snake.y = 160;
-            snake.cells = [];
-            snake.maxCells = 4;
-            snake.dx = grid;
-            snake.dy = 0;
-
-            apple.x = getRandomInt(0, 25) * grid;
-            apple.y = getRandomInt(0, 25) * grid;
+            resetGame();
           }
         }
       });
     }
+
+    function resetGame() {
+      snake.x = 160;
+      snake.y = 160;
+      snake.cells = [];
+      snake.maxCells = 4;
+      snake.dx = grid;
+      snake.dy = 0;
+
+      apple.x = getRandomInt(0, 25) * grid;
+      apple.y = getRandomInt(0, 25) * grid;
+    }
+
+
 
     // listen to keyboard events to move the snake
     document.addEventListener('keydown', function (e) {
