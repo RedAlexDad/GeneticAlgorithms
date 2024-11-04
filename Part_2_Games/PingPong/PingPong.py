@@ -10,7 +10,20 @@ from datetime import datetime
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-class PongGameOptimizer:
+def timeit(func):
+    @wraps(func)
+    def timed_function(*args, **kwargs):
+        start_time = time.time()
+        result = func(*args, **kwargs)
+        end_time = time.time()
+        elapsed_time = end_time - start_time
+
+        print(f"Функция '{func.__name__}' выполнялась {elapsed_time:.4f} секунд.")
+        return result
+
+    return timed_function
+
+class PingPongGame:
     def __init__(self, width=750, height=585, grid_size=15, experiment_name='pingpong', device=None):
         self.width = width
         self.height = height
@@ -53,12 +66,10 @@ class PongGameOptimizer:
     def log_hparams_and_metrics(self, hparams, best_score):
         # Получение текущего времени в читаемом формате
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        run_name = f"run_{timestamp}"  # Читаемое имя
+        run_name = f"run_{timestamp}"
 
         # Логирование гиперпараметров и метрик
-        self.writer.add_hparams(hparams, {
-            'best_score': best_score,
-        }, run_name=run_name)
+        self.writer.add_hparams(hparams, {'best_score': best_score}, run_name=run_name)
         
     def init_paddle(self, x_position):
         return {
@@ -232,6 +243,7 @@ class PongGameOptimizer:
             self.generate_random(population, randomNum)
         )
 
+    # @timeit
     def get_scores(self, population, patience=100):
         return [self.get_score(W, patience) for W in population]
     
@@ -301,15 +313,15 @@ def parse_arguments():
     parser.add_argument('-g', '--num_generations', type=int, default=100, help='Количество поколений.')
     parser.add_argument('-t', '--num_repeats', type=int, default=3, help='Количество повторений для усреднения.')
     parser.add_argument('-s', '--num_restarts', type=int, default=5, help='Количество перезапусков алгоритма.')
-    parser.add_argument('-d', '--device', type=str, default='cuda', choices=['cpu', 'cuda'], help='Устройство вычисления: cpu или cuda')
+    parser.add_argument('-d', '--device', type=str, default='cpu', choices=['cpu', 'cuda'], help='Устройство вычисления: cpu или cuda')
     
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = parse_arguments()
-    optimizer = PongGameOptimizer(device=args.device)
+    game = PingPongGame(device=args.device)
     
-    optimizer.train(
+    game.train(
         population_size=args.population_size,
         random_size=args.random_size,
         elite_size=args.elite_size,
