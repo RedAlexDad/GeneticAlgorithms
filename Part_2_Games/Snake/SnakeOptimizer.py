@@ -11,6 +11,14 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 def timeit(func):
+    """Декоратор для измерения времени выполнения функции.
+    
+    Args:
+        func: Функция, которую нужно обернуть.
+
+    Returns:
+        Функция с поведением, аналогичным оригинальному, но с измерением времени.
+    """
     @wraps(func)
     def timed_function(*args, **kwargs):
         start_time = time.time()
@@ -26,6 +34,16 @@ def timeit(func):
 
 class SnakeOptimizer:
     def __init__(self, grid_size=16, width=400, height=400, device=None, experiment_name='snake', wall_collision=True):
+        """Инициализация объекта SnakeOptimizer.
+
+        Args:
+            grid_size (int): Размер клетки (по умолчанию 16).
+            width (int): Ширина игрового поля (по умолчанию 400).
+            height (int): Высота игрового поля (по умолчанию 400).
+            device (str, optional): Устройство ('cpu' или 'cuda') для запуска.
+            experiment_name (str): Название эксперимента (по умолчанию 'snake').
+            wall_collision (bool): Указывает, должно ли происходить столкновение со стенами (по умолчанию True).
+        """
         self.grid = grid_size
         self.width = width
         self.height = height
@@ -39,10 +57,25 @@ class SnakeOptimizer:
         
     @staticmethod
     def get_device(select=None):
+        """Определяет устройство ('cpu' или 'cuda') на основе доступности графического процессора.
+
+        Args:
+            select (str, optional): Выбор устройства ('cpu', 'cuda'). Если None, выбирается 'cuda', если доступен.
+
+        Returns:
+            torch.device: TensorFlow устройство.
+        """
         return torch.device('cuda' if (select in [None, 'cuda'] and torch.cuda.is_available()) else 'cpu')
 
     def initialize_log_dir(self, experiment_name):
-        """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter."""
+        """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter.
+
+        Args:
+            experiment_name (str): Название эксперимента.
+
+        Returns:
+            SummaryWriter: Инициализированный объект SummaryWriter для логирования.
+        """
         self.experiment_name = f'{experiment_name}' # Сохраняем название эксперимента
         self.log_dir = f'logs/{experiment_name}'  # Базовый путь для логов
         # Проверка существования директории и генерация нового имени, если необходимо
@@ -59,6 +92,12 @@ class SnakeOptimizer:
         return SummaryWriter(log_dir=self.log_dir) # Возвращаем инициализированный SummaryWriter
 
     def log_hparams_and_metrics(self, hparams, best_score):
+        """Логирует гиперпараметры и лучший результат в TensorBoard с временной меткой.
+
+        Args:
+            hparams (dict): Гиперпараметры, используемые в эксперименте.
+            best_score (float): Лучший результат текущего эксперимента.
+        """
         # Получение текущего времени в читаемом формате
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = f"run_{timestamp}"  # Читаемое имя
@@ -69,11 +108,18 @@ class SnakeOptimizer:
         }, run_name=run_name)
         
     def generate_apple(self):
+        """Генерация нового местоположения для яблока в случайной клетке игрового поля.
+        """
         # Генерация нового местоположения для яблока
         self.apple['x'] = random.randint(0, 25) * self.grid
         self.apple['y'] = random.randint(0, 25) * self.grid
 
     def loop(self):
+        """Обновление положения змейки и проверка коллизий.
+
+        Returns:
+            int: -1, если игра закончилась (столкновение), 0, если игра продолжается.
+        """
         # Обновление положения змейки
         self.snake['x'] += self.snake['dx']
         self.snake['y'] += self.snake['dy']
@@ -115,12 +161,22 @@ class SnakeOptimizer:
         return 0
 
     def restart(self):
+        """Инициализация змейки и яблока с начальным состоянием.
+
+        Returns:
+            tuple: Змейка и яблоко в виде словарей.
+        """
         # Инициализация змейки и яблока
         snake = dict(x=160, y=160, dx=self.grid, dy=0, cells=[], maxCells=4)
         apple = dict(x=320, y=320)
         return snake, apple
 
     def apply_action(self, actionId):
+        """Обновление направления движения змейки на основе действия.
+
+        Args:
+            actionId (int): Идентификатор действия (0 - влево, 1 - вверх, 2 - вправо, 3 - вниз).
+        """
         actionMap = {0: 37, 1: 38, 2: 39, 3: 40}
         key = actionMap[actionId]
 
@@ -139,7 +195,11 @@ class SnakeOptimizer:
             self.snake['dy'] = self.grid
 
     def get_features(self):
-        # Получение признаков для текущего состояния игры
+        """Получение признаков для текущего состояния игры, необходимых для нейросети.
+
+        Returns:
+            list: Список признаков, представляющих текущее состояние игры.
+        """
         sensors = [
             np.sign(self.snake['dx']),
             np.sign(self.snake['dy']),
@@ -161,16 +221,40 @@ class SnakeOptimizer:
         return sensors
 
     def get_one(self):
+        """Генерация случайной матрицы весов и смещений для нейросети.
+
+        Returns:
+            tuple: Матрица весов и вектор смещений.
+        """
         # Генерация случайной матрицы весов и смещений для нейросети
         W = np.random.normal(size=(16, 4))
         b = np.random.normal(size=(4,))
         return W, b
 
     def getAction(self, W, b):
+        """Определение действия на основе признаков и параметров нейросети.
+
+        Args:
+            W (numpy.ndarray): Матрица весов.
+            b (numpy.ndarray): Вектор смещений.
+
+        Returns:
+            int: Идентификатор действия (0, 1, 2 или 3).
+        """
         # Определение действия на основе признаков и параметров нейросети
         return (W.T.dot(self.get_features()) + b).argmax()
 
     def get_score(self, W, b, patience=100):
+        """Получение оценки производительности текущих параметров нейросети.
+
+        Args:
+            W (numpy.ndarray): Матрица весов.
+            b (numpy.ndarray): Вектор смещений.
+            patience (int): Количество шагов до уменьшения максимальной длины змейки (по умолчанию 100).
+
+        Returns:
+            int: Максимальная длина змейки в текущем эпизоде.
+        """
         # Получение оценки производительности текущих параметров
         self.snake, self.apple = self.restart()
         maxCells_patience = patience
@@ -187,6 +271,16 @@ class SnakeOptimizer:
         return self.snake['maxCells']
 
     def mutate(self, W, b, mutation_rate=0.02):
+        """Мутация параметров нейросети с заданной вероятностью.
+
+        Args:
+            W (numpy.ndarray): Матрица весов.
+            b (numpy.ndarray): Вектор смещений.
+            mutation_rate (float): Вероятность мутации (по умолчанию 0.02).
+
+        Returns:
+            tuple: Новые матрица весов и вектор смещений после мутации.
+        """
         # Мутация параметров нейросети с заданной вероятностью
         dW, db = self.get_one()
         dWM, dbM = self.get_one()
@@ -194,12 +288,32 @@ class SnakeOptimizer:
                 b + db * (dbM > 0) * mutation_rate)
 
     def crossover(self, W1, b1, W2, b2):
+        """Кроссовер параметров между двумя нейросетями.
+
+        Args:
+            W1 (numpy.ndarray): Матрица весов первой нейросети.
+            b1 (numpy.ndarray): Вектор смещений первой нейросети.
+            W2 (numpy.ndarray): Матрица весов второй нейросети.
+            b2 (numpy.ndarray): Вектор смещений второй нейросети.
+
+        Returns:
+            tuple: Новая матрица весов и вектор смещений после кроссовера.
+        """
         # Кроссовер параметров между двумя нейросетями
         maskW = np.random.random(W1.shape) < 0.5
         maskb = np.random.random(b1.shape) < 0.5
         return W1 * maskW + W2 * (~maskW), b1 * maskb + b2 * (~maskb)
 
     def generate_random(self, population, size):
+        """Генерация случайной популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            size (int): Размер для новой популяции.
+
+        Returns:
+            list: Новая популяция с случайными параметрами.
+        """
         # Генерация случайной популяции
         new_population = []
         for _ in range(size):
@@ -210,6 +324,16 @@ class SnakeOptimizer:
         return new_population
 
     def selection(self, population, scores, topK=2):
+        """Отбор лучших кандидатов в популяции на основе их оценок.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума в популяции.
+            topK (int): Количество лучших кандидатов для выбора (по умолчанию 2).
+
+        Returns:
+            list: Новый список отобранных индивидов.
+        """
         # Отбор лучших кандидатов в популяции
         scores = np.array(scores) * 1.0
         scores /= scores.sum()
@@ -222,6 +346,16 @@ class SnakeOptimizer:
         return new_population
 
     def breed(self, population, scores, nChilds=10):
+        """Вывод потомства на основе текущей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума.
+            nChilds (int): Количество создаваемых потомков (по умолчанию 10).
+
+        Returns:
+            list: Новый список потомства.
+        """
         # Вывод потомства на основе текущей популяции
         scores = np.array(scores) * 1.0
         scores /= scores.sum()
@@ -234,17 +368,45 @@ class SnakeOptimizer:
         return new_population
 
     def get_new_population(self, population, scores, topK=4, randomNum=10):
+        """Получение новой популяции на основе текущей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума.
+            topK (int): Количество лучших кандидатов (по умолчанию 4).
+            randomNum (int): Количество случайных особей в новой популяции (по умолчанию 10).
+
+        Returns:
+            list: Новая популяция.
+        """
         # Получение новой популяции
         return (self.selection(population, scores, topK) + 
                 self.breed(population, scores, nChilds=max(0, len(population) - randomNum - topK)) +
                 self.generate_random(population, randomNum))
 
     def get_scores(self, population, patience=100):
+        """Получение оценок для всей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            patience (int): Количество шагов до уменьшения максимальной длины змейки (по умолчанию 100).
+
+        Returns:
+            list: Список оценок для каждого индивидуума в популяции.
+        """
         # Получение оценок для всей популяции
         scores = [self.get_score(W, b, patience) for W, b in population]
         return scores
-    
+
     def train(self, population_size=64, num_generations=10, num_repeats=3, num_restarts=5):
+        """Обучение с использованием генетического алгоритма.
+
+        Args:
+            population_size (int): Размер популяции (по умолчанию 64).
+            num_generations (int): Количество поколений для обработки (по умолчанию 10).
+            num_repeats (int): Количество повторений для надежности (по умолчанию 3).
+            num_restarts (int): Количество перезапусков в оптимизации (по умолчанию 5).
+        """
         PATIENCE = lambda x: 100 * ((x + 5) // 5)
         best_thingey = None
         best_score = 0
@@ -290,6 +452,11 @@ class SnakeOptimizer:
 
 
 def parse_arguments():
+    """Парсит аргументы командной строки для настройки параметров запуска оптимизатора змейки.
+
+    Returns:
+        Namespace: Объект с аргументами командной строки.
+    """
     parser = argparse.ArgumentParser(description='Запуск оптимизатора змейки с указанными параметрами.')
     parser.add_argument('-p', '--population_size', type=int, default=64, help='Размер популяции.')
     parser.add_argument('-g', '--num_generations', type=int, default=10, help='Количество поколений для обработки.')

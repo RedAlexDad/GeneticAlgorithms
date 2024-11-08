@@ -11,6 +11,14 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 def timeit(func):
+    """Декоратор для измерения времени выполнения функции.
+    
+    Args:
+        func: Функция, которую нужно обернуть.
+
+    Returns:
+        Функция с поведением, аналогичным оригинальному, но с измерением времени.
+    """
     @wraps(func)
     def timed_function(*args, **kwargs):
         start_time = time.time()
@@ -25,6 +33,15 @@ def timeit(func):
 
 class DoodleJumpGame:
     def __init__(self, width=375, height=667, platform_width=65, platform_height=20, experiment_name='doodlejump'):
+        """Инициализация объекта DoodleJumpGame.
+
+        Args:
+            width (int): Ширина игрового поля (по умолчанию 375).
+            height (int): Высота игрового поля (по умолчанию 667).
+            platform_width (int): Ширина платформы (по умолчанию 65).
+            platform_height (int): Высота платформы (по умолчанию 20).
+            experiment_name (str): Название эксперимента (по умолчанию 'doodlejump').
+        """
         self.settings = self.init_settings(width, height, platform_width, platform_height)
         self.doodle, self.platforms = self.init_states()
         self.sensor_web = self.create_sensor_web()
@@ -32,6 +49,14 @@ class DoodleJumpGame:
         self.writer = self.initialize_log_dir(experiment_name)
 
     def initialize_log_dir(self, experiment_name):
+        """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter.
+
+        Args:
+            experiment_name (str): Название эксперимента.
+
+        Returns:
+            SummaryWriter: Инициализированный объект SummaryWriter для логирования.
+        """
         """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter."""
         self.experiment_name = f'{experiment_name}'  # Сохраняем название эксперимента
         self.log_dir = f'logs/{experiment_name}'  # Базовый путь для логов
@@ -47,6 +72,12 @@ class DoodleJumpGame:
         return SummaryWriter(log_dir=self.log_dir)  # Возвращаем инциализированный SummaryWriter
     
     def log_hparams_and_metrics(self, hparams, best_score):
+        """Логирует гиперпараметры и лучший результат в TensorBoard с временной меткой.
+
+        Args:
+            hparams (dict): Гиперпараметры, используемые в эксперименте.
+            best_score (float): Лучший результат текущего эксперимента.
+        """
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = f"run_{timestamp}"
 
@@ -54,6 +85,17 @@ class DoodleJumpGame:
         self.writer.add_hparams(hparams, {'best_score': best_score}, run_name=run_name)
 
     def init_settings(self, width, height, platform_width, platform_height):
+        """Инициализация настроек игры.
+
+        Args:
+            width (int): Ширина игрового поля.
+            height (int): Высота игрового поля.
+            platform_width (int): Ширина платформы.
+            platform_height (int): Высота платформы.
+
+        Returns:
+            dict: Словарь с настройками игры.
+        """
         return {
             'width': width,
             'height': height,
@@ -70,6 +112,11 @@ class DoodleJumpGame:
         }
 
     def init_states(self):
+        """Инициализация состояний игрока и платформ.
+
+        Returns:
+            tuple: Игрок (дудл) и список платформ в виде словарей.
+        """
         settings = self.settings
         platforms = [{
             'x': settings['width'] / 2 - settings['platformWidth'] / 2,
@@ -98,6 +145,11 @@ class DoodleJumpGame:
         return doodle, platforms
     
     def create_sensor_web(self):
+        """Создает сетку сенсоров для определения состояния игровых объектов.
+
+        Returns:
+            numpy.ndarray: Координаты сенсоров в виде массива.
+        """
         sensor_web = np.meshgrid(
             np.arange(-self.settings['width'] * 2 // 3, self.settings['width'] * 2 // 3, 50),
             np.arange(-self.settings['height'] * 2 // 3, self.settings['height'] * 2 // 3, 75)
@@ -105,9 +157,18 @@ class DoodleJumpGame:
         return np.concatenate([sensor_web[0].flatten()[:, None], sensor_web[1].flatten()[:, None]], axis=1)
 
     def restart(self):
+        """Сбрасывает состояние игры к начальному.
+
+        Сбрасывает состояние дудла и платформ.
+        """
         self.doodle, self.platforms = self.init_states()
 
     def loop(self):
+        """Основной игровой цикл, включает обновление положения объектов и проверку коллизий.
+
+        Returns:
+            int: -1 если игра закончилась (дудл вышел за пределы), 0 если игра продолжается.
+        """
         doodle, platforms, settings = self.doodle, self.platforms, self.settings
         doodle['dy'] += settings['gravity']
 
@@ -165,6 +226,11 @@ class DoodleJumpGame:
         return 0
 
     def apply_action(self, actionId):
+        """Применяет действие игрока к дудлу.
+
+        Args:
+            actionId (int): Идентификатор действия (например, влево, вправо, ожидание).
+        """
         settings, doodle = self.settings, self.doodle
         actionMap = {0: 37, 1: 39, 2: -1} # Left, Right, Wait
         key = actionMap[actionId]
@@ -181,6 +247,11 @@ class DoodleJumpGame:
             settings['keydown'] = False
 
     def get_features(self):
+        """Получение признаков для текущего состояния игры, необходимых для нейросети.
+
+        Returns:
+            numpy.ndarray: Список признаков, представляющих текущее состояние игры.
+        """
         doodle, platforms, settings = self.doodle, self.platforms, self.settings
         points = np.array([(p['x'], p['y']) for p in platforms])
 
@@ -198,21 +269,56 @@ class DoodleJumpGame:
         return np.concatenate([sensors, [doodle['dx'], doodle['dy'], 1]])
 
     def get_one(self, h1=5, n_classes=3):
+        """Генерация случайных весов для нейросети.
+
+        Args:
+            h1 (int): Количество нейронов в скрытом слое (по умолчанию 5).
+            n_classes (int): Число классов для вывода (по умолчанию 3).
+
+        Returns:
+            tuple: Две матрицы весов для нейросети.
+        """
         W = np.random.normal(size=(self.sensor_web.shape[0] + 3, h1))
         W2 = np.random.normal(size=(h1, n_classes))
         return W, W2
 
     @staticmethod
     def softmax(x):
+        """Вычисляет softmax для заданного массива.
+
+        Args:
+            x (numpy.ndarray): Входной массив.
+
+        Returns:
+            numpy.ndarray: Нормализованный выходной массив с вероятностями.
+        """
         xe = np.exp(x - x.max())
         return xe / xe.sum()
 
     def get_action(self, weights):
+        """Определение действия на основе весов и текущих признаков.
+
+        Args:
+            weights (tuple): Матрицы весов для нейросети.
+
+        Returns:
+            int: Идентификатор действия (индекс соответствующего действия).
+        """
         W, W2 = weights
         logits = np.maximum(W.T.dot(self.get_features()), 0).dot(W2)
         return np.random.choice(np.arange(len(logits)), p=self.softmax(logits))
 
     def get_score(self, weights, patience=100, return_actions=False):
+        """Получение оценки производительности текущих параметров нейросети.
+
+        Args:
+            weights (tuple): Матрицы весов для нейросети.
+            patience (int): Количество шагов до уменьшения максимального счёта (по умолчанию 100).
+            return_actions (bool): Если True, возвращает действия и координаты (по умолчанию False).
+
+        Returns:
+            int/tuple: Текущий счёт или кортеж (действия, координаты, минимальное расстояние до платформ).
+        """
         self.restart()
         maxScore_patience = patience
         maxScore_prev = self.settings['minPlatformSpace']
@@ -238,12 +344,30 @@ class DoodleJumpGame:
         return self.settings['minPlatformSpace']
 
     def mutate(self, weights, mutation_rate=0.01):
+        """Мутация параметров нейросети с заданной вероятностью.
+
+        Args:
+            weights (tuple): Матрицы весов для нейросети.
+            mutation_rate (float): Вероятность мутации (по умолчанию 0.01).
+
+        Returns:
+            tuple: Обновлённые матрицы весов после мутации.
+        """
         W, W2 = weights
         dW, dW2 = self.get_one()
         dM, dM2 = self.get_one()
         return W + dW * (dM > 0) * mutation_rate, W2 + dW2 * (dM2 > 0) * mutation_rate
 
     def crossover(self, W1, W2):
+        """Кроссовер параметров между двумя нейросетями.
+
+        Args:
+            W1 (numpy.ndarray): Матрица весов первой нейросети.
+            W2 (numpy.ndarray): Матрица весов второй нейросети.
+
+        Returns:
+            list: Список с новой матрицей весов.
+        """
         result = []
         for w1, w2 in zip(W1, W2):
             maskW = np.random.rand(*w1.shape) < 0.5
@@ -251,6 +375,15 @@ class DoodleJumpGame:
         return result
 
     def generate_random(self, population, size):
+        """Генерация случайной популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            size (int): Размер для новой популяции.
+
+        Returns:
+            list: Новая популяция с случайными параметрами.
+        """
         new_population = []
         for _ in range(size):
             if np.random.random() < 0.5:
@@ -260,6 +393,16 @@ class DoodleJumpGame:
         return new_population
 
     def selection(self, population, scores, topK=2):
+        """Отбор лучших кандидатов в популяции на основе их оценок.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума в популяции.
+            topK (int): Количество лучших кандидатов для выбора (по умолчанию 2).
+
+        Returns:
+            list: Новый список отобранных индивидов.
+        """
         scores = np.array(scores).astype(np.float32)
         scores /= scores.sum()
         elitismTopK = np.argsort(scores)[::-1][:topK // 2]
@@ -272,6 +415,16 @@ class DoodleJumpGame:
         return new_population
 
     def breed(self, population, scores, nChilds=10):
+        """Вывод потомства на основе текущей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума.
+            nChilds (int): Количество создаваемых потомков (по умолчанию 10).
+
+        Returns:
+            list: Новый список потомства.
+        """
         scores = np.array(scores).astype(np.float32)
         scores /= scores.sum()
         parents = np.random.choice(len(scores), p=scores, size=(nChilds, 2))
@@ -282,6 +435,17 @@ class DoodleJumpGame:
         return new_population
 
     def get_new_population(self, population, scores, topK=4, randomNum=10):
+        """Получение новой популяции на основе текущей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума.
+            topK (int): Количество лучших кандидатов (по умолчанию 4).
+            randomNum (int): Количество случайных особей в новой популяции (по умолчанию 10).
+
+        Returns:
+            list: Новая популяция.
+        """
         return self.factorize(
             self.selection(population, scores, topK) +
             self.breed(population, scores, nChilds=max(0, len(population) - randomNum - topK)) +
@@ -290,6 +454,15 @@ class DoodleJumpGame:
 
     @staticmethod
     def factorize(population, factor=3):
+        """Факторизация популяции с заданным множителем.
+
+        Args:
+            population (list): Текущая популяция.
+            factor (int): Множитель для сохранения формата массива (по умолчанию 3).
+
+        Returns:
+            list: Популяция с обновленными весами.
+        """
         for i, p in enumerate(population):
             population[i] = tuple([np.array([[int(10 ** factor * w) / 10 ** factor for w in W] for W in pp])
                                    for pp in p])
@@ -297,9 +470,24 @@ class DoodleJumpGame:
 
     # @timeit
     def get_scores(self, population, patience=100):
+        """Получение оценок для всей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            patience (int): Количество шагов до уменьшения максимального счёта (по умолчанию 100).
+
+        Returns:
+            list: Список оценок для каждого индивидуума в популяции.
+        """
         return [self.get_score(W, patience) for W in population]
 
     def save_thingey(self, best_thingey, score):
+        """Сохранение лучших параметров нейросети в файл.
+
+        Args:
+            best_thingey (list): Лучшие параметры нейросети.
+            score (float): Лучший счёт.
+        """
         # Создание директории models, если она не существует
         os.makedirs('models', exist_ok=True)
 
@@ -312,8 +500,18 @@ class DoodleJumpGame:
                 json.dumps([[int(1e5 * w) / 1e5 for w in W] for W in best_thingey[1]])
             ))
         print(f"Модель сохранена в {file_name}")
-        
+
     def train(self, population_size=64, random_size=20, elite_size=4, num_generations=100, num_repeats=3, num_restarts=5):
+        """Обучение с использованием генетического алгоритма.
+
+        Args:
+            population_size (int): Размер популяции (по умолчанию 64).
+            random_size (int): Размер случайной популяции (по умолчанию 20).
+            elite_size (int): Количество лучших особей для сохранения (по умолчанию 4).
+            num_generations (int): Количество поколений для обработки (по умолчанию 100).
+            num_repeats (int): Количество повторений для оценки (по умолчанию 3).
+            num_restarts (int): Количество перезапусков алгоритма (по умолчанию 5).
+        """
         PATIENCE = lambda x: 100 * ((x + 2) // 2)
         # Логирование гиперпараметров
         hparams = {
@@ -354,6 +552,11 @@ class DoodleJumpGame:
         self.log_hparams_and_metrics(hparams, best_score)
 
 def parse_arguments():
+    """Парсит аргументы командной строки для настройки параметров запуска игры Doodle Jump.
+
+    Returns:
+        Namespace: Объект с аргументами командной строки.
+    """
     parser = argparse.ArgumentParser(description='Настройки для DoodleJump AI оптимизации.')
     parser.add_argument('-p', '--population_size', type=int, default=64, help='Размер популяции.')
     parser.add_argument('-r', '--random_size', type=int, default=20, help='Размер случайной популяции.')

@@ -11,6 +11,14 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 def timeit(func):
+    """Декоратор для измерения времени выполнения функции.
+    
+    Args:
+        func: Функция, которую нужно обернуть.
+
+    Returns:
+        Функция с поведением, аналогичным оригинальному, но с измерением времени.
+    """
     @wraps(func)
     def timed_function(*args, **kwargs):
         start_time = time.time()
@@ -25,6 +33,15 @@ def timeit(func):
 
 class PingPongGame:
     def __init__(self, width=750, height=585, grid_size=15, experiment_name='pingpong', device=None):
+        """Инициализация объекта PingPongGame.
+
+        Args:
+            width (int): Ширина игрового поля (по умолчанию 750).
+            height (int): Высота игрового поля (по умолчанию 585).
+            grid_size (int): Размер клетки (по умолчанию 15).
+            experiment_name (str): Название эксперимента (по умолчанию 'pingpong').
+            device (str, optional): Устройство ('cpu' или 'cuda') для запуска.
+        """
         self.width = width
         self.height = height
         self.grid = grid_size
@@ -44,10 +61,25 @@ class PingPongGame:
 
     @staticmethod
     def get_device(select=None):
+        """Определяет устройство ('cpu' или 'cuda') на основе доступности графического процессора.
+
+        Args:
+            select (str, optional): Выбор устройства ('cpu', 'cuda'). Если None, выбирается 'cuda', если доступен.
+
+        Returns:
+            torch.device: TensorFlow устройство.
+        """
         return torch.device('cuda' if (select in [None, 'cuda'] and torch.cuda.is_available()) else 'cpu')
 
     def initialize_log_dir(self, experiment_name):
-        """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter."""
+        """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter.
+
+        Args:
+            experiment_name (str): Название эксперимента.
+
+        Returns:
+            SummaryWriter: Инициализированный объект SummaryWriter для логирования.
+        """
         self.experiment_name = f'{experiment_name}' # Сохраняем название эксперимента
         self.log_dir = f'logs/{experiment_name}'  # Базовый путь для логов
         # Проверка существования директории и генерация нового имени, если необходимо
@@ -64,6 +96,12 @@ class PingPongGame:
         return SummaryWriter(log_dir=self.log_dir) # Возвращаем инициализированный SummaryWriter
   
     def log_hparams_and_metrics(self, hparams, best_score):
+        """Логирует гиперпараметры и лучший результат в TensorBoard с временной меткой.
+
+        Args:
+            hparams (dict): Гиперпараметры, используемые в эксперименте.
+            best_score (float): Лучший результат текущего эксперимента.
+        """
         # Получение текущего времени в читаемом формате
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = f"run_{timestamp}"
@@ -72,6 +110,14 @@ class PingPongGame:
         self.writer.add_hparams(hparams, {'best_score': best_score}, run_name=run_name)
         
     def init_paddle(self, x_position):
+        """Инициализация ракетки на заданной позиции.
+
+        Args:
+            x_position (int): Позиция по оси X для ракетки.
+
+        Returns:
+            dict: Словарь с параметрами ракетки (позиция, размеры и скорость).
+        """
         return {
             'x': x_position,
             'y': self.height / 2 - self.paddle_height / 2,
@@ -81,6 +127,11 @@ class PingPongGame:
         }
 
     def init_ball(self):
+        """Инициализация мяча с начальным состоянием.
+
+        Returns:
+            dict: Словарь с параметрами мяча (позиция, размеры, скорость и счёт).
+        """
         return {
             'x': self.width / 2,
             'y': self.height / 2,
@@ -93,6 +144,15 @@ class PingPongGame:
         }
 
     def collides(self, obj1, obj2):
+        """Проверка столкновения между двумя объектами.
+
+        Args:
+            obj1 (dict): Первый объект.
+            obj2 (dict): Второй объект.
+
+        Returns:
+            bool: True если произошло столкновение, иначе False.
+        """
         return (
             obj1['x'] < obj2['x'] + obj2['width'] and
             obj1['x'] + obj1['width'] > obj2['x'] and
@@ -101,11 +161,21 @@ class PingPongGame:
         )
 
     def restart(self):
+        """Сбрасывает состояние игры к начальному.
+
+        Возможные изменения:
+            Сбрасывает мяча и ракетки к центральной позиции и обнулит счёт.
+        """
         self.ball.update({'resetting': False, 'x': self.width / 2, 'y': self.height / 2, 'score': 0})
         self.left_paddle.update({'y': self.height / 2 - self.paddle_height / 2})
         self.right_paddle.update({'y': self.height / 2 - self.paddle_height / 2})
 
     def loop(self):
+        """Основной игровой цикл, включает обновление положения объектов и проверку коллизий.
+
+        Returns:
+            int: -1 если игра закончилась (мяч вышел за пределы), 0 если игра продолжается.
+        """
         self.left_paddle['y'] += self.left_paddle['dy']
         self.right_paddle['y'] += self.right_paddle['dy']
 
@@ -131,12 +201,17 @@ class PingPongGame:
         return 0
 
     def apply_action(self, actionId):
+        """Применяет действие игрока к ракеткам.
+
+        Args:
+            actionId (int): Идентификатор действия (-1 для ожидания, 0-5 для управления ракетками).
+        """
         # правый игрок вверх
-    # правый игрок вниз
-    # левый игрок вверх
-    # левый игрок вниз
-    # правый игрок ожидает
-    # вниз игрок ожидает
+        # правый игрок вниз
+        # левый игрок вверх
+        # левый игрок вниз
+        # правый игрок ожидает
+        # вниз игрок ожидает
         actionMap = {0: 38, 1: 40, 2: 87, 3: 83, 4: -1, 5: -2}
         key = actionMap[actionId]
 
@@ -154,6 +229,11 @@ class PingPongGame:
             self.left_paddle['dy'] = 0
 
     def get_features(self):
+        """Получение признаков для текущего состояния игры, необходимых для нейросети.
+
+        Returns:
+            list: Список признаков, представляющих текущее состояние игры.
+        """
         sensors = [
             np.sign(self.left_paddle['y'] - self.ball['y']),
             np.abs(self.left_paddle['y'] - self.ball['y']) / self.height,
@@ -174,13 +254,35 @@ class PingPongGame:
         return sensors
 
     def get_one(self):
+        """Генерация случайной матрицы весов для нейросети.
+
+        Returns:
+            torch.Tensor: Сгенерированная матрица весов.
+        """
         return torch.normal(mean=0.0, std=1.0, size=(15, 6), device=self.device)
 
     def get_action(self, W):
+        """Определение действия на основе весов и текущих признаков.
+
+        Args:
+            W (torch.Tensor): Матрица весов.
+
+        Returns:
+            int: Идентификатор действия (индекс соответствующего действия).
+        """
         features = torch.tensor(self.get_features(), device=self.device, dtype=torch.float32)
         return (W.t().matmul(features)).argmax().item()
 
     def get_score(self, W, patience=100):
+        """Получение оценки производительности текущих параметров нейросети.
+
+        Args:
+            W (torch.Tensor): Матрица весов.
+            patience (int): Количество шагов до уменьшения максимального счёта (по умолчанию 100).
+
+        Returns:
+            int: Текущий счёт после завершения игры.
+        """
         self.restart()
         maxScore_patience = patience
         maxScore_prev = self.ball['score']
@@ -201,15 +303,42 @@ class PingPongGame:
         return self.ball['score']
 
     def mutate(self, W, mutation_rate=0.02):
+        """Мутация параметров нейросети с заданной вероятностью.
+
+        Args:
+            W (torch.Tensor): Матрица весов.
+            mutation_rate (float): Вероятность мутации (по умолчанию 0.02).
+
+        Returns:
+            torch.Tensor: Новая матрица весов после мутации.
+        """
         dW = self.get_one()
         dM = self.get_one() > 0
         return W + dW * dM * mutation_rate
 
     def crossover(self, W1, W2):
+        """Кроссовер параметров между двумя нейросетями.
+
+        Args:
+            W1 (torch.Tensor): Матрица весов первой нейросети.
+            W2 (torch.Tensor): Матрица весов второй нейросети.
+
+        Returns:
+            torch.Tensor: Новая матрица весов после кроссовера.
+        """
         maskW = torch.rand_like(W1, device=W1.device) < 0.5
         return W1 * maskW + W2 * (~maskW)
 
     def generate_random(self, population, size):
+        """Генерация случайной популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            size (int): Размер для новой популяции.
+
+        Returns:
+            list: Новая популяция с случайными параметрами.
+        """
         new_population = []
         for _ in range(size):
             if np.random.random() < 0.5:
@@ -219,6 +348,16 @@ class PingPongGame:
         return new_population
 
     def selection(self, population, scores, topK=2):
+        """Отбор лучших кандидатов в популяции на основе их оценок.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума в популяции.
+            topK (int): Количество лучших кандидатов для выбора (по умолчанию 2).
+
+        Returns:
+            list: Новый список отобранных индивидов.
+        """
         scores = np.array(scores) * 1.0
         scores = scores / scores.sum()
         
@@ -229,6 +368,16 @@ class PingPongGame:
                [population[i].clone() for i in roulleteTopK]
 
     def breed(self, population, scores, nChilds=10):
+        """Вывод потомства на основе текущей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума.
+            nChilds (int): Количество создаваемых потомков (по умолчанию 10).
+
+        Returns:
+            list: Новый список потомства.
+        """
         scores = np.array(scores) * 1.0
         scores /= scores.sum()
         
@@ -237,6 +386,17 @@ class PingPongGame:
         return [self.mutate(self.crossover(population[pA], population[pB])) for pA, pB in parents]
 
     def get_new_population(self, population, scores, topK=4, randomNum=10):
+        """Получение новой популяции на основе текущей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            scores (list): Оценки для каждого индивидуума.
+            topK (int): Количество лучших кандидатов (по умолчанию 4).
+            randomNum (int): Количество случайных особей в новой популяции (по умолчанию 10).
+
+        Returns:
+            list: Новая популяция.
+        """
         return (
             self.selection(population, scores, topK) +
             self.breed(population, scores, nChilds=max(0, len(population) - randomNum - topK)) +
@@ -245,9 +405,28 @@ class PingPongGame:
 
     # @timeit
     def get_scores(self, population, patience=100):
+        """Получение оценок для всей популяции.
+
+        Args:
+            population (list): Текущая популяция.
+            patience (int): Количество шагов до уменьшения максимального счёта (по умолчанию 100).
+
+        Returns:
+            list: Список оценок для каждого индивидуума в популяции.
+        """
         return [self.get_score(W, patience) for W in population]
-    
+
     def train(self, population_size=128, random_size=20, elite_size=5, num_generations=100, num_repeats=3, num_restarts=5):
+        """Обучение с использованием генетического алгоритма.
+
+        Args:
+            population_size (int): Размер популяции (по умолчанию 128).
+            random_size (int): Размер случайных особей в популяции (по умолчанию 20).
+            elite_size (int): Количество лучших особей для сохранения (по умолчанию 5).
+            num_generations (int): Количество поколений для обработки (по умолчанию 100).
+            num_repeats (int): Количество повторений для оценки (по умолчанию 3).
+            num_restarts (int): Количество перезапусков алгоритма (по умолчанию 5).
+        """
         best_thingey = None
         best_score = 0
         PATIENCE = lambda x: 1000 * ((x + 2) // 2)
@@ -306,6 +485,11 @@ class PingPongGame:
 
 
 def parse_arguments():
+    """Парсит аргументы командной строки для настройки параметров запуска игры Ping Pong.
+
+    Returns:
+        Namespace: Объект с аргументами командной строки.
+    """
     parser = argparse.ArgumentParser(description='Настройки для Pong AI оптимизации.')
     parser.add_argument('-p', '--population_size', type=int, default=128, help='Размер популяции.')
     parser.add_argument('-r', '--random_size', type=int, default=20, help='Размер случайной популяции.')

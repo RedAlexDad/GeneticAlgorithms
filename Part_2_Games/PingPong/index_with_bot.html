@@ -12,13 +12,13 @@
     }
 
     body {
-      background: black;
+      background: white;
       display: flex;
       align-items: center;
       justify-content: center;
     }
   </style>
-  <script src="models/weights_pingpong_0.js"></script>
+  <script src="models/weights_pingpong_3.js"></script>
   <!-- <script src="other_models/pingpong_weights_5.js"></script> -->
 </head>
 
@@ -173,7 +173,7 @@
       }
 
       // draw paddles
-      context.fillStyle = 'white';
+      context.fillStyle = 'black';
       context.fillRect(leftPaddle.x, leftPaddle.y, leftPaddle.width, leftPaddle.height);
       context.fillRect(rightPaddle.x, rightPaddle.y, rightPaddle.width, rightPaddle.height);
 

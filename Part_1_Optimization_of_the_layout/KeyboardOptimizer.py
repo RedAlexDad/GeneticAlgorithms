@@ -11,6 +11,14 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 def timeit(func):
+    """Декоратор для измерения времени выполнения функции.
+    
+    Args:
+        func: Функция, которую нужно обернуть.
+
+    Returns:
+        Функция с поведением, аналогичным оригинальному, но с измерением времени.
+    """
     @wraps(func)
     def timed_function(*args, **kwargs):
         start_time = time.time()
@@ -25,6 +33,16 @@ def timeit(func):
 
 class KeyboardOptimizer:
     def __init__(self, messages, message_word, font_name='Roboto-Bold.ttf', working_dir=os.getcwd(), device=None, experiment_name='keyboard'):
+        """Инициализация объекта KeyboardOptimizer.
+
+        Args:
+            messages (list): Список сообщений для обработки.
+            message_word (str): Слово для генерации сообщений.
+            font_name (str): Название шрифта для отображения на клавиатуре (по умолчанию 'Roboto-Bold.ttf').
+            working_dir (str): Путь к рабочей директории (по умолчанию текущая директория).
+            device (str, optional): Устройство ('cpu' или 'cuda') для запуска.
+            experiment_name (str): Название эксперимента (по умолчанию 'keyboard').
+        """
         self.keyboard_img_path = os.path.join(working_dir, 'keyboard.png')
         self.font_path = os.path.join(working_dir, font_name)
         self.ROWS_CONTENT = [
@@ -51,6 +69,15 @@ class KeyboardOptimizer:
         self.writer = self.initialize_log_dir(experiment_name, message_word)
         
     def initialize_log_dir(self, experiment_name, message_word):
+        """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter.
+
+        Args:
+            experiment_name (str): Название эксперимента.
+            message_word (str): Слово для генерации сообщений.
+
+        Returns:
+            SummaryWriter: Инициализированный объект SummaryWriter для логирования.
+        """
         """Создает уникальную директорию для эксперимента и инициализирует SummaryWriter."""
         self.experiment_name = f'{experiment_name}_{message_word}' # Сохраняем название эксперимента
         self.log_dir = f'logs/{experiment_name}_{message_word}'  # Базовый путь для логов
@@ -68,6 +95,12 @@ class KeyboardOptimizer:
         return SummaryWriter(log_dir=self.log_dir) # Возвращаем инициализированный SummaryWriter
     
     def log_hparams_and_metrics(self, hparams, best_score):
+        """Логирует гиперпараметры и лучший результат в TensorBoard с временной меткой.
+
+        Args:
+            hparams (dict): Гиперпараметры, используемые в эксперименте.
+            best_score (float): Лучший результат текущего эксперимента.
+        """
         # Получение текущего времени в читаемом формате
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         run_name = f"run_{timestamp}"  # Читаемое имя
@@ -79,12 +112,23 @@ class KeyboardOptimizer:
         
     @staticmethod
     def get_device(select=None):
-        if select is None or select == 'cuda':
-            return torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        return torch.device('cpu')
+        """Определяет устройство ('cpu' или 'cuda') на основе доступности графического процессора.
+
+        Args:
+            select (str, optional): Выбор устройства ('cpu', 'cuda'). Если None, выбирается 'cuda', если доступен.
+
+        Returns:
+            torch.device: TensorFlow устройство.
+        """
+        return torch.device('cuda' if (select in [None, 'cuda'] and torch.cuda.is_available()) else 'cpu')
     
     # @timeit
     def prepare_data(self, messages):
+        """Подготавливает данные. Обрабатывает сообщения и формирует массив символов и их частот.
+
+        Args:
+            messages (list): Список исходных сообщений.
+        """
         df = pd.DataFrame({'msg': np.concatenate(messages)})
         df.msg = df.msg.str.lower().replace('ё', 'е').replace(u'\xa0', u' ').replace('-', ' ')
         df.msg = df.msg.replace('[^a-zа-я0-9\s?,.!]', '', regex=True)
@@ -102,6 +146,11 @@ class KeyboardOptimizer:
 
     # @timeit
     def generate_one(self):
+        """Создает один маппер клавиш, соответствующий каждой букве на клавиатуре, на основе заданного контента строк.
+
+        Returns:
+            dict: Маппер символов к координатам на клавиатуре.
+        """
         mapper = {}
         for k, row in enumerate(self.ROWS_CONTENT):
             for i, s in enumerate(row):
@@ -110,6 +159,14 @@ class KeyboardOptimizer:
 
     # @timeit
     def plot_keyboard(self, mapper):
+        """Строит изображение клавиатуры с отображением текущих позиций символов из маппера.
+
+        Args:
+            mapper (dict): Маппер символов к координатам на клавиатуре.
+
+        Returns:
+            Image: Изображение клавиатуры с отображенными символами.
+        """
         keyboard_img = Image.open(self.keyboard_img_path).convert('RGB')
         draw = ImageDraw.Draw(keyboard_img)
         font = ImageFont.truetype(self.font_path, 30)
@@ -124,6 +181,14 @@ class KeyboardOptimizer:
     # @timeit
     # Метод для расчета функции приспособленности
     def get_scores_cpu(self, population):
+        """Вызывает расчет функции приспособленности для популяции на CPU, используя кэширование расстояний между парами символов.
+
+        Args:
+            population (list): Список мапперов клавиш для оценки.
+
+        Returns:
+            list: Список оценок (приспособленности) для каждого маппера.
+        """
         scores = []
         for mapper in population:
             cache = {}
@@ -148,6 +213,14 @@ class KeyboardOptimizer:
     # @timeit
     # Метод для расчета функции приспособленности
     def get_scores_gpu(self, population):
+        """Вызывает расчет функции приспособленности для популяции на GPU с использованием тензоров PyTorch.
+
+        Args:
+            population (list): Список мапперов клавиш для оценки.
+
+        Returns:
+            list: Список оценок (приспособленности) для каждого маппера.
+        """
         scores = []
         
         # Мэппинг символов в индексы
@@ -184,6 +257,15 @@ class KeyboardOptimizer:
     # @timeit
     # Фрагмент метода мутации
     def mutation(self, mapper, mutation_rate=0.05):
+        """Использует вероятность мутации для обмена местами выбранных клавиш в расписании клавиатуры.
+
+        Args:
+            mapper (dict): Текущий маппер клавиш.
+            mutation_rate (float): Вероятность мутации для каждой клавиши (по умолчанию 0.05).
+
+        Returns:
+            dict: Новый мутированный маппер клавиш.
+        """
         # получение ключей и значений текущей раскладки
         keys = list(mapper.keys())
         values = list(mapper.values())
@@ -203,6 +285,15 @@ class KeyboardOptimizer:
     # @timeit
     # Метод кроссовера
     def crossover(self, parent1, parent2):
+        """Создает новый маппер клавиш (потомка) на основе кроссовера двух родительских мапперов.
+
+        Args:
+            parent1 (dict): Первый родительский маппер.
+            parent2 (dict): Второй родительский маппер.
+
+        Returns:
+            dict: Новая раскладка клавиш (потомок).
+        """
         keysA = list(parent1.keys())
         valuesA = list(parent1.values())
 
@@ -242,11 +333,29 @@ class KeyboardOptimizer:
     # @timeit
     # Метод для создания начальной популяции из случайных раскладок
     def generate_initial(self, population_size):
+        """Создает начальную популяцию из случайных раскладок клавиатуры указанного размера.
+
+        Args:
+            population_size (int): Размер популяции.
+
+        Returns:
+            list: Список случайных мапперов клавиш для первой популяции.
+        """
         return [self.generate_one() for _ in range(population_size)]
     
     # @timeit
     # Метод для генерации новой популяции на основе текущей
     def generate_new_population(self, population, scores, mutation_rate=0.1):
+        """Генерирует новую популяцию на основе текущей через мутацию и кроссовер.
+
+        Args:
+            population (list): Текущая популяция мапперов.
+            scores (list): Оценки (приспособленности) для текущей популяции.
+            mutation_rate (float): Вероятность мутации для новых потомков (по умолчанию 0.1).
+
+        Returns:
+            list: Новая популяция.
+        """
         new_population = []
 
         # Селекция: выбираем лучших родителей
@@ -267,6 +376,19 @@ class KeyboardOptimizer:
 
     # @timeit
     def evolve(self, population_size, elitism_top_k, random_size, num_generations, num_restarts):
+        """Основной метод, запускающий процесс эволюции.
+
+        Args:
+            population_size (int): Размер популяции.
+            elitism_top_k (int): Количество лучших особей, сохраняемых для элитизма.
+            random_size (int): Число случайных особей для добавления в популяцию.
+            num_generations (int): Количество генераций для обработки.
+            num_restarts (int): Количество перезапусков оптимизации.
+
+        Returns:
+            tuple: Лучшее расстояние, изображение с наилучшей раскладкой и статистика.
+        """
+
         best_score = np.inf
         best_image = None
         stats = []
@@ -320,6 +442,11 @@ class KeyboardOptimizer:
         return best_score, best_image, stats
 
 def parse_arguments():
+    """Парсит аргументы командной строки для настройки параметров запуска оптимизатора клавиатуры.
+
+    Returns:
+        Namespace: Объект с аргументами командной строки.
+    """
     parser = argparse.ArgumentParser(description='Запуск оптимизатора клавиатуры с указанными параметрами.')
     parser.add_argument('-p', '--population_size', type=int, default=200, help='Размер популяции.')
     parser.add_argument('-e', '--elitism_top_k', type=int, default=10, help='Число лучших индивидов, сохраняемых для элитизма.')
