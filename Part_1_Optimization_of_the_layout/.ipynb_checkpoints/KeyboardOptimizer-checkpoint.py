@@ -43,7 +43,7 @@ class KeyboardOptimizer:
             device (str, optional): Устройство ('cpu' или 'cuda') для запуска.
             experiment_name (str): Название эксперимента (по умолчанию 'keyboard').
         """
-        self.keyboard_img_path = os.path.join(working_dir, 'keyboard_white.png')
+        self.keyboard_img_path = os.path.join(working_dir, 'keyboard.png')
         self.font_path = os.path.join(working_dir, font_name)
         self.ROWS_CONTENT = [
             list('1234567890'),
@@ -159,55 +159,25 @@ class KeyboardOptimizer:
 
     # @timeit
     def plot_keyboard(self, mapper):
-        """Строит изображение клавиатуры с отображением текущих позиций символов из маппера и соединительными линиями по буквам слова.
+        """Строит изображение клавиатуры с отображением текущих позиций символов из маппера.
 
         Args:
             mapper (dict): Маппер символов к координатам на клавиатуре.
 
         Returns:
-            Image: Изображение клавиатуры с отображенными символами и соединительными линиями.
+            Image: Изображение клавиатуры с отображенными символами.
         """
         keyboard_img = Image.open(self.keyboard_img_path).convert('RGB')
         draw = ImageDraw.Draw(keyboard_img)
         font = ImageFont.truetype(self.font_path, 30)
-        number_font = ImageFont.truetype(self.font_path, 20)
 
-        # Отображаем символы из маппера
         for s, v in mapper.items():
             display_char = 'Ent' if s == '\n' else ('__' if s == ' ' else s)
             x, y = v[0] * 10, v[1] * 10
-            draw.text((x, y), display_char, font=font, fill=(0, 0, 0, 255))
-
-        # Если задано слово, рисуем соединительные линии и нумерацию
-        if self.message_word:
-            line_color = (255, 0, 0)  # Красный цвет линий
-            line_width = 3  # Ширина линий
-            number_box_offset = -15  # Смещение для номера
-            box_size = 20  # Размер квадрата
-            
-            for index, char in enumerate(self.message_word):
-                if char in mapper:
-                    x, y = mapper[char][0] * 10, mapper[char][1] * 10
-                    # Рисуем квадрат под номером
-                    draw.rectangle(
-                        [x + number_box_offset - 2, y + number_box_offset - 2, 
-                        x + number_box_offset + box_size, y + number_box_offset + box_size],
-                        fill=(0, 0, 0)  # Черный квадрат
-                    )
-                    # Добавляем номер для каждой буквы
-                    draw.text((x + number_box_offset, y + number_box_offset), f"{index + 1}",
-                            font=number_font, fill=line_color)
-
-                    # Соединительные линии для последовательных букв
-                    if index < len(self.message_word) - 1:
-                        next_char = self.message_word[index + 1]
-                        if next_char in mapper:
-                            x1, y1 = mapper[next_char][0] * 10, mapper[next_char][1] * 10
-                            draw.line((x, y, x1, y1), fill=line_color, width=line_width)
-
-
-        return keyboard_img.resize((1920, 1080))
-
+            draw.text((x, y), display_char, font=font, fill=(255, 255, 255, 255))
+        
+        return keyboard_img.resize((500, 250))
+    
     # @timeit
     # Метод для расчета функции приспособленности
     def get_scores_cpu(self, population):
@@ -459,7 +429,7 @@ class KeyboardOptimizer:
                           f'Среднее расстояние в популяции: {np.mean(scores):.1f}')
                     
             print('-' * 120)
-            
+
         self.log_hparams_and_metrics({
             'population_size': population_size,
             'elitism_top_k': elitism_top_k,
@@ -468,16 +438,6 @@ class KeyboardOptimizer:
             'num_restarts': num_restarts,
         }, best_score)
         self.writer.close()
-        
-        # Проверяем, существует ли папка, и создаём её, если она не существует
-        if not os.path.exists('img'):
-            os.makedirs('img')
-            
-        # Сохраняем изображение с именем эксперимента
-        if best_image:
-            output_path = f"img/{self.unique_experiment_name}.png"
-            best_image.save(output_path, "PNG")
-            os.system(f"xdg-open {output_path}")
                 
         return best_score, best_image, stats
 
@@ -494,7 +454,7 @@ def parse_arguments():
     parser.add_argument('-g', '--num_generations', type=int, default=100, help='Количество поколений для обработки.')
     parser.add_argument('-n', '--num_restarts', type=int, default=10, help='Количество перезапусков в оптимизации.')
     parser.add_argument('-m', '--message_word', type=str, default='высокоинтеллектуальное_аннотирование_образование', help='Слово, используемое в генерации сообщений.')
-    parser.add_argument('-d', '--device', type=str, choices=['cpu', 'cuda'], default='cpu', help='Устройство для запуска оптимизатора.')
+    parser.add_argument('-d', '--device', type=str, choices=['cpu', 'cuda'], default='cuda', help='Устройство для запуска оптимизатора.')
 
     return parser.parse_args()
 
@@ -515,10 +475,15 @@ if __name__ == '__main__':
     NUM_GENERATIONS = args.num_generations
     NUM_RESTARTS = args.num_restarts
     
-    optimizer.evolve(
+    best_score, best_image, _ = optimizer.evolve(
         population_size=POPULATION_SIZE,
         elitism_top_k=ELITISM_TOPK,
         random_size=RANDOM_SIZE,
         num_generations=NUM_GENERATIONS,
         num_restarts=NUM_RESTARTS
     )
+
+    if best_image:
+        output_path = "best_layout.png"
+        best_image.save(output_path, "PNG")
+        os.system(f"xdg-open {output_path}")
